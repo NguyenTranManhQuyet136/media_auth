@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: media_nginx
+    ports:
+      - "8081:80"        # minio.local và console.minio.local
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./conf.d:/etc/nginx/conf.d:ro
+      - ./logs:/var/log/nginx
+    networks:
+      - media_net
+    depends_on:
+      - auth-backend
+      - minio
+
+  auth-backend:
+    build: 
+      context: ./auth-backend
+    container_name: media_auth_backend
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./auth-backend/app.py:/app/app.py # Giúp cập nhật code ngay lập tức
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+      - "local.openedx.io:host-gateway"
+      - "apps.local.openedx.io:host-gateway" # Thêm dòng này
+    networks:
+      - media_net
+
+  minio:
+    image: minio/minio:latest
+    container_name: media_minio
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: minio_admin_password
+    volumes:
+      - minio_server_minio_data:/data # Dùng chung dữ liệu với nhà cũ
+    ports:
+      - "127.0.0.1:9004:9000" # MinIO Service
+      - "9003:9001"           # MinIO Console mới (tránh xung đột 9001)
+    command: server /data --console-address ":9001"
+    networks:
+      - media_net
+
+networks:
+  media_net:
+    driver: bridge
+
+volumes:
+  minio_server_minio_data:
+    external: true # Khai báo đây là két sắt của bên nhà hàng xóm
