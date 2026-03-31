@@ -50,10 +50,9 @@ def verify_jwt():
     logger.info(f"🍪 [COOKIES]: {dict(request.cookies)}")
     
     # In tất cả các Header liên quan để bạn soi
-    logger.info(f"📑 [HEADERS]:")
+    logger.info("📑 [HEADERS]:")
     for key, value in request.headers.items():
-        if key in ['Authorization', 'Referer', 'User-Agent', 'X-Original-URI']:
-            logger.info(f"   -> {key}: {value}")
+        logger.info(f"   -> {key}: {value}")
 
     # Lấy thông tin từ Nginx (URI gốc, Authorization)
     original_uri = request.headers.get("X-Original-URI", "")
@@ -73,8 +72,7 @@ def verify_jwt():
     if not token and original_uri and "token=" in original_uri:
         token = original_uri.split("token=")[-1].split("&")[0]
 
-    """
-    # --- Tầng xác thực (Đã vô hiệu hóa để TEST) ---
+    # --- Tầng xác thực RS512 ---
     if not token: 
         logger.warning(f"🚫 Từ chối truy cập (Thiếu Token): {original_uri}")
         return "", 401
@@ -91,16 +89,11 @@ def verify_jwt():
         )
 
         logger.info(f"✅ Hợp lệ cho User: {payload.get('preferred_username', 'User')}")
-        # 3. Luôn trả về 200 OK để mọi file video đều được tải mượt mà
         return "", 200
 
     except Exception as e:
-        logger.error(f"❌ Lỗi trong Test Mode: {e}")
-        return "", 200 # Ngay cả khi lỗi vẫn cho qua để test
-    """
-
-    # 🔓 CHẾ ĐỘ MỞ CỬA: Luôn trả về 200 OK
-    return "", 200
+        logger.warning(f"❌ Xác thực rớt (Token Sai/Hết hạn): {e}")
+        return "", 401
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
