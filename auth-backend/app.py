@@ -41,9 +41,20 @@ def get_public_key(token):
         logger.error(f"❌ Lỗi đọc khóa: {e}")
         return None
 
-# ================= XÁC THỰC (VERIFY) =================
 @app.route("/verify-jwt", methods=["GET"])
 def verify_jwt():
+    # 🕵️‍♂️ [DEBUG] HỨNG TRỌN BỘ THÔNG TIN TỪ TRÌNH DUYỆT / OPEN EDX
+    logger.info("--- 📥 NHẬN YÊU CẦU MỚI ---")
+    logger.info(f"🌐 IP: {request.remote_addr}")
+    logger.info(f"📍 URI: {request.headers.get('X-Original-URI', 'N/A')}")
+    logger.info(f"🍪 [COOKIES]: {dict(request.cookies)}")
+    
+    # In tất cả các Header liên quan để bạn soi
+    logger.info(f"📑 [HEADERS]:")
+    for key, value in request.headers.items():
+        if key in ['Authorization', 'Referer', 'User-Agent', 'X-Original-URI']:
+            logger.info(f"   -> {key}: {value}")
+
     # Lấy thông tin từ Nginx (URI gốc, Authorization)
     original_uri = request.headers.get("X-Original-URI", "")
     auth_header = request.headers.get("Authorization", "")
