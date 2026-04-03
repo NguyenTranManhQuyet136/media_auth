@@ -13,6 +13,7 @@ services:
       - ./logs:/var/log/nginx
     networks:
       - media_net
+      - tutor_local_default
     depends_on:
       - auth-backend
       - minio
@@ -50,6 +51,8 @@ services:
 networks:
   media_net:
     driver: bridge
+  tutor_local_default:
+    external: true
 
 volumes:
   minio_server_minio_data:

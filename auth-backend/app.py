@@ -1,4 +1,6 @@
 import logging
+import re
+import requests
 from flask import Flask, request
 from jose import jwt
 
@@ -94,6 +96,53 @@ def verify_jwt():
     except Exception as e:
         logger.warning(f"❌ Xác thực rớt (Token Sai/Hết hạn): {e}")
         return "", 401
+
+@app.route('/rewrite-playlist')
+def rewrite_playlist():
+    """
+    Endpoint chuyên dụng để 'độ' file .m3u8:
+    Tự động chèn ?token=... vào các file .ts bên trong để trình duyệt tải được streaming.
+    """
+    token = request.args.get("token")
+    # Lấy đường dẫn file gốc từ Header X-Original-URI mà Nginx gửi sang
+    original_uri = request.headers.get("X-Original-URI", "")
+    
+    # 1. Soát vé trước khi làm việc
+    status_code = verify_jwt()[1]
+    if status_code != 200:
+        logger.warning(f"🚫 Từ chối Rewrite (Token sai): {original_uri}")
+        return "Unauthorized", 401
+
+    try:
+        # 2. Gắp file m3u8 gốc từ MinIO cổng 9000 (Giao tiếp nội bộ giữa các container)
+        # Bỏ đi phần '/auth' nếu có trong URI
+        clean_path = original_uri.split('?')[0]
+        minio_url = f"http://minio:9000{clean_path}"
+        
+        resp = requests.get(minio_url)
+        if resp.status_code != 200:
+            return f"Không tìm thấy file trên MinIO: {clean_path}", 404
+        
+        m3u8_content = resp.text
+
+        # 3. 'Lươn lẹo' thông minh: 
+        # Tìm các file (.ts hoặc .m3u8) mà CHƯA CÓ dấu hỏi chấm (?) đằng sau để gắn Token.
+        # Điều này giúp hỗ trợ cả Master Playlist gọi Playlist con.
+        rewritten_content = re.sub(r'(\.(ts|m3u8))(?!\?)', rf'\1?token={token}', m3u8_content)
+
+        # Log một đoạn nội dung để kiểm tra
+        sample = rewritten_content[:200].replace('\n', ' ')
+        logger.info(f"✅ Đã 'độ' xong {clean_path}. Nội dung xem trước: {sample}...")
+        
+        # 4. Trả về cho trình duyệt với Header chuẩn HLS
+        return rewritten_content, 200, {
+            'Content-Type': 'application/vnd.apple.mpegurl',
+            'Access-Control-Allow-Origin': '*'
+        }
+        
+    except Exception as e:
+        logger.error(f"💥 Lỗi khi xử lý Rewrite: {str(e)}")
+        return "Internal Server Error", 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
